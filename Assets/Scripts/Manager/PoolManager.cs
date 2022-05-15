@@ -3,6 +3,7 @@ using UnityEngine;
 
 public class PoolManager : Singleton<PoolManager>
 {
+
     Dictionary<GameObject, List<GameObject>> pools = new Dictionary<GameObject, List<GameObject>>();
 
     public GameObject Init(GameObject obj)
