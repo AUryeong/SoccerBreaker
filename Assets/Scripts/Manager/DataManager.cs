@@ -9,6 +9,15 @@ using UnityEngine.UI;
 public class GameData
 {
     public string name = "";
+    public List<BrickPos> bricks = new List<BrickPos>();
+}
+
+[System.Serializable]
+public class BrickPos
+{
+    public int hp;
+    public int x;
+    public int y;
 }
 public class DataManager : Singleton<DataManager>
 {
