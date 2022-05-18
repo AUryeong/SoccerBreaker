@@ -21,6 +21,8 @@ public class GameManager : Singleton<GameManager>
     TouchSenser touchSenser; // 터치 센서
     [SerializeField]
     SpriteRenderer touchArrow;
+    [SerializeField]
+    SpriteRenderer ballArrow;
     public BallState State; // 현재 상태
     Vector3 clickPos;
     [Header("벽돌 관리")]
@@ -103,17 +105,19 @@ public class GameManager : Singleton<GameManager>
     public void StartDrag(PointerEventData data)
     {
         touchArrow.gameObject.SetActive(true);
+        ballArrow.gameObject.SetActive(true);
         clickPos = Camera.main.ScreenToWorldPoint(data.position);
     }
     public void UpdateDrag(PointerEventData data)
     {
         Vector3 mousePos = Camera.main.ScreenToWorldPoint(data.position);
-        Vector3 distance = mousePos - clickPos;
         float angle = Mathf.Atan2(mousePos.y - clickPos.y, mousePos.x - clickPos.x) * Mathf.Rad2Deg - 90;
         touchArrow.transform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
         touchArrow.transform.position = new Vector3((mousePos.x + clickPos.x)/2, (mousePos.y + clickPos.y) / 2, 0);
-        touchArrow.size.Set(0.1f, distance.magnitude / 1.25f);
-        touchArrow.size = touchArrow.size;
+
+
+        Vector3 distance = mousePos - clickPos;
+        touchArrow.size = new Vector2 (0.07f, distance.magnitude / 1.25f);
         if (angle > 80 || angle < -80)
         {
             if(angle > 0 || angle < -180)
@@ -121,19 +125,23 @@ public class GameManager : Singleton<GameManager>
             else
                 angle = -80;
         }
+        Quaternion angle2 = Quaternion.AngleAxis(angle, Vector3.forward);
         distance.Normalize();
-        RaycastHit2D raycastHit2D = Physics2D.Raycast(defaultBall.transform.position, distance, Mathf.Infinity, LayerMask.GetMask("Wall"));
+        RaycastHit2D raycastHit2D = Physics2D.CircleCast(defaultBall.transform.position, 10f, distance, Mathf.Infinity, LayerMask.GetMask("Wall"));
         if(raycastHit2D.collider != null)
         {
-            
+            ballArrow.transform.rotation = angle2;
+            ballArrow.transform.position = new Vector2((defaultBall.transform.position.x + raycastHit2D.point.x)/2, (defaultBall.transform.position.y + raycastHit2D.point.y)/2);
+            ballArrow.size = new Vector2(0.07f, raycastHit2D.distance/ 1.25f);
         }
-        defaultBall.transform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
+        defaultBall.transform.rotation = angle2;
     }
     public void EndDrag(PointerEventData data)
     {
         State = BallState.Shooting;
         touchSenser.gameObject.SetActive(false);
         touchArrow.gameObject.SetActive(false);
+        ballArrow.gameObject.SetActive(false);
         StartCoroutine(ShootBall(BallCount));
     }
     void EndShootingBall(Ball endBall)
