@@ -26,7 +26,10 @@ public class GameManager : Singleton<GameManager>
     [SerializeField]
     SpriteRenderer ballRoute; // 공 줄
     [SerializeField]
-    SpriteRenderer ballEx;
+    SpriteRenderer ballEx; // 공 예상 경로
+
+    [SerializeField]
+    float ballGravity;
     public BallState State; // 현재 상태
     Vector3 clickPos;
     [Header("벽돌 관리")]
@@ -36,7 +39,9 @@ public class GameManager : Singleton<GameManager>
     Transform brickParent;
     public List<Brick> bricks = new List<Brick>();
 
-    public int Score;
+    [SerializeField]
+    float BallSpeed = 4;
+    public int Score = 1;
     public int BallCount = 1;
     public int ShootingBallCount = 0;
 
@@ -45,10 +50,6 @@ public class GameManager : Singleton<GameManager>
     void Start()
     {
         SetResolution(); // 초기에 게임 해상도 고정
-        for(int i = 0; i < 5; i++)
-        {
-            bricks.Add(GetNewBrick(i, 0, 5));
-        }
     }
     #region 해상도 변경
     public void SetResolution()
@@ -90,18 +91,33 @@ public class GameManager : Singleton<GameManager>
         MoveCloud(deltaTime);
     }
     #region 벽돌 관리
-    public Brick GetNewBrick(int x = 0, int y = 0, int hp = 0)
+    public Brick GetNewBrick(int x = 0, int hp = 0)
     {
         GameObject copyBrick = PoolManager.Instance.Init(defaultBrick.gameObject);
         copyBrick.transform.SetParent(brickParent);
         copyBrick.transform.localScale = defaultBrick.transform.localScale;
+        copyBrick.transform.localPosition = new Vector3(x * 1.8f, 1.23f);
         Brick brick = copyBrick.GetComponent<Brick>();
         brick.x = x;
-        brick.y = y;
+        brick.y = 0;
         brick.hp = hp;
         brick.BrickMove();
         brick.ShowHp();
+        
+        if (!bricks.Contains(brick))
+        {
+            bricks.Add(brick);
+        }
         return brick;
+    }
+    void BrickMoveAndCreate()
+    {
+        foreach (Brick brick in bricks)
+        {
+            brick.y++;
+            brick.BrickMove();
+        }
+        GetNewBrick(Random.Range(0, 6), Score);
     }
     #endregion
 
@@ -147,10 +163,8 @@ public class GameManager : Singleton<GameManager>
             ballRoute.transform.position = new Vector2((defaultBall.transform.position.x + raycastHit2D.point.x)/2, (defaultBall.transform.position.y + raycastHit2D.point.y)/2);
             ballRoute.size = new Vector2(0.07f, raycastHit2D.distance/ 1.25f);
 
-            ballEx.transform.position = raycastHit2D.point + raycastHit2D.normal/10 ; 
-            ballEx.transform.rotation = angle2;
+            ballEx.transform.position = raycastHit2D.point + raycastHit2D.normal/10; 
         }
-        defaultBall.transform.rotation = angle2;
     }
     public void EndDrag(PointerEventData data)
     {
@@ -159,39 +173,45 @@ public class GameManager : Singleton<GameManager>
         touchRoute.gameObject.SetActive(false);
         ballRoute.gameObject.SetActive(false);
         ballEx.gameObject.SetActive(false);
-        StartCoroutine(ShootBall(BallCount));
+
+        Vector3 direction = Camera.main.ScreenToWorldPoint(data.position) - clickPos;
+        direction.Normalize();
+        if (direction.y <= 0.178f)
+        {
+            direction.Set((direction.x < 0) ? -1 : 1, 0.178f, 0);
+        }
+        StartCoroutine(ShootBall(BallCount, direction));
     }
-    void EndShootingBall(Ball endBall)
+    void EndShootingBall()
     {
         State = BallState.Wait;
         Score++;
         touchSenser.gameObject.SetActive(true);
-        defaultBall.gameObject.SetActive(true);
-        defaultBall.transform.position = endBall.transform.position;
-        defaultBall.transform.rotation = Quaternion.identity;
-        foreach(Brick brick in bricks)
-        {
-            brick.y++;
-            brick.BrickMove();
-        }
+        BrickMoveAndCreate();
     }
 
     public void DisableBall(Ball ball)
     {
         ball.gameObject.SetActive(false);
+        
         ShootingBallCount--;
-        if(ShootingBallCount == 0) // 모든 공이 다 튕겨서 땅에 도착했을때
+        if (ShootingBallCount == BallCount - 1) // 첫 번째 공
         {
-            EndShootingBall(ball);
+            defaultBall.gameObject.SetActive(true);
+            defaultBall.transform.position = ball.transform.position;
+            defaultBall.transform.rotation = Quaternion.identity;
+        }
+        if (ShootingBallCount == 0) // 모든 공이 다 튕겨서 땅에 도착했을때
+        {
+            EndShootingBall();
         }
     }
 
-    IEnumerator ShootBall(int ballCount) // 공 쏘기
+    IEnumerator ShootBall(int ballCount, Vector2 direciton) // 공 쏘기
     {
         ShootingBallCount = ballCount;
         defaultBall.gameObject.SetActive(false);
         Vector3 pos = defaultBall.transform.position;
-        Quaternion rotation = defaultBall.transform.rotation;
         Vector3 scale = defaultBall.transform.localScale;
         while(ballCount > 0)
         {
@@ -199,8 +219,9 @@ public class GameManager : Singleton<GameManager>
             copyBall.State = BallState.Shooting;
             copyBall.transform.SetParent(ballParent);
             copyBall.transform.position = pos;
-            copyBall.transform.rotation = rotation;
             copyBall.transform.localScale = scale;
+            copyBall.GetComponent<Rigidbody2D>().AddForce(direciton * 100 * BallSpeed);
+            copyBall.RB.gravityScale = ballGravity;
             ballCount--;
             yield return new WaitForSeconds(0.1f);
         }
