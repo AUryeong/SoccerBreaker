@@ -60,9 +60,9 @@ public class Ball : MonoBehaviour
                             euler = (euler > 180) ? 540 - euler : 180 - euler;
                         else
                             euler = 360 - euler;
+                        noCrash = true;
                     }
                     collision.collider.GetComponent<Brick>().Hit();
-                    noCrash = true;
                     break;
             }
             transform.localRotation = Quaternion.Euler(0, 0, euler);
