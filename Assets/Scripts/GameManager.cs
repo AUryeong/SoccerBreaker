@@ -10,7 +10,9 @@ using DG.Tweening;
 public class GameManager : Singleton<GameManager>
 {
     [SerializeField]
-    Transform[] Clouds;
+    Transform[] clouds;
+    [SerializeField]
+    TextMeshProUGUI scoreWindow;
     
     [Header("공 관리")]
     [SerializeField]
@@ -27,29 +29,42 @@ public class GameManager : Singleton<GameManager>
     SpriteRenderer ballRoute; // 공 줄
     [SerializeField]
     SpriteRenderer ballEx; // 공 예상 경로
-
+    [SerializeField]
+    SpriteRenderer charSprite; // 캐릭터 이미지
     [SerializeField]
     float ballGravity;
+    [SerializeField]
+    float ballShootDelay;
+
+
     public BallState State; // 현재 상태
+    float ballShootCooltime;
     Vector3 clickPos;
+    Vector3 ballDirection;
+
     [Header("벽돌 관리")]
     [SerializeField]
     Brick defaultBrick;
     [SerializeField]
-    Transform brickParent;
-    public List<Brick> bricks = new List<Brick>();
+    Block defaultAddBall;
+    [SerializeField]
+    Transform blockParent;
+    public List<Block> blocks = new List<Block>();
 
     [SerializeField]
     float BallSpeed = 4;
+    int ShotBallCount = 0;
+    int ShootBallCount = 0;
     public int Score = 1;
+    public int MaxScore = 1;
     public int BallCount = 1;
-    public int ShootingBallCount = 0;
 
     // Start
 
     void Start()
     {
         SetResolution(); // 초기에 게임 해상도 고정
+        ScoreWindowUpdate();
     }
     #region 해상도 변경
     public void SetResolution()
@@ -89,35 +104,88 @@ public class GameManager : Singleton<GameManager>
     {
         float deltaTime = Time.deltaTime;
         MoveCloud(deltaTime);
+        if(ShootBallCount > 0 && State == BallState.Shooting)
+           ShootingBall(deltaTime);
     }
-    #region 벽돌 관리
-    public Brick GetNewBrick(int x = 0, int hp = 0)
+
+    void ScoreWindowUpdate()
     {
-        GameObject copyBrick = PoolManager.Instance.Init(defaultBrick.gameObject);
-        copyBrick.transform.SetParent(brickParent);
+        scoreWindow.text = (Score >= MaxScore ? "<#ff0000>" : "")+ "점수 : " + Score.ToString() + "\n" + "기록 : " + MaxScore.ToString();
+    }
+
+    public void AddBall(GameObject addBall)
+    {
+        addBall.SetActive(false);
+    }
+
+    void GameOver()
+    {
+        foreach (Block block in blocks)
+        {
+            block.gameObject.SetActive(false);
+        }
+        Score = 1;
+        defaultBall.transform.localPosition = Vector3.zero;
+        BlockMoveAndCreate();
+        ScoreWindowUpdate();
+    }
+    #region 블럭 관리
+    public void GetNewAddBall(byte x, byte y)
+    {
+        Block copyAddBall = PoolManager.Instance.Init(defaultAddBall.gameObject).GetComponent<Block>();
+        copyAddBall.transform.SetParent(blockParent);
+        copyAddBall.transform.localScale = defaultAddBall.transform.localScale;
+        copyAddBall.transform.localPosition = new Vector3(x * 1.8f, 1.23f);
+        copyAddBall.x = x;
+        copyAddBall.y = y;
+        copyAddBall.BlockMove();
+        if (!blocks.Contains(copyAddBall))
+        {
+            blocks.Add(copyAddBall);
+        }
+    }
+    public void GetNewBrick(byte x, byte y, int hp)
+    {
+        Brick copyBrick = PoolManager.Instance.Init(defaultBrick.gameObject).GetComponent<Brick>();
+        copyBrick.transform.SetParent(blockParent);
         copyBrick.transform.localScale = defaultBrick.transform.localScale;
         copyBrick.transform.localPosition = new Vector3(x * 1.8f, 1.23f);
-        Brick brick = copyBrick.GetComponent<Brick>();
-        brick.x = x;
-        brick.y = 0;
-        brick.hp = hp;
-        brick.BrickMove();
-        brick.ShowHp();
-        
-        if (!bricks.Contains(brick))
+        copyBrick.x = x;
+        copyBrick.y = y;
+        copyBrick.hp = hp;
+        copyBrick.BlockMove();
+        copyBrick.ShowHp();
+        if (!blocks.Contains(copyBrick))
         {
-            bricks.Add(brick);
+            blocks.Add(copyBrick);
         }
-        return brick;
     }
-    void BrickMoveAndCreate()
+    void BlockMoveAndCreate()
     {
-        foreach (Brick brick in bricks)
+        foreach (Block block in blocks)
         {
-            brick.y++;
-            brick.BrickMove();
+            block.y++;
+            block.BlockMove();
+            if (block.gameObject.activeSelf && block.y >= 6)
+            {
+                GameOver();
+                return;
+            }
         }
-        GetNewBrick(Random.Range(0, 6), Score);
+        int brickCount = Random.Range(3, 5);
+        List<int> indexList = new List<int>(6) { 0,1,2,3,4,5 };
+        int ballAddIndex = Random.Range(0, brickCount);
+        for (int i = 0; i < brickCount; i++)
+        {
+
+            int index = Random.Range(0, indexList.Count);
+            if (ballAddIndex == i)
+                GetNewAddBall((byte)indexList[index], 0);
+            else
+                GetNewBrick((byte)indexList[index], 0, Score);
+            indexList.RemoveAt(index);
+        }
+            
     }
     #endregion
 
@@ -166,6 +234,24 @@ public class GameManager : Singleton<GameManager>
             ballEx.transform.position = raycastHit2D.point + raycastHit2D.normal/10; 
         }
     }
+
+    void ShootingBall(float deltaTime)
+    {
+        ballShootCooltime += deltaTime;
+        if (ballShootCooltime < ballShootDelay)
+        {
+            return;
+        }
+        Ball copyBall = PoolManager.Instance.Init(defaultBall.gameObject).GetComponent<Ball>();
+        copyBall.State = BallState.Shooting;
+        copyBall.transform.SetParent(ballParent);
+        copyBall.transform.position = defaultBall.transform.position;
+        copyBall.transform.localScale = defaultBall.transform.localScale;
+        copyBall.GetComponent<Rigidbody2D>().AddForce(ballDirection * 100 * BallSpeed);
+        copyBall.RB.gravityScale = ballGravity;
+        ballShootCooltime -= ballShootDelay;
+        ShootBallCount--;
+    }
     public void EndDrag(PointerEventData data)
     {
         State = BallState.Shooting;
@@ -180,52 +266,40 @@ public class GameManager : Singleton<GameManager>
         {
             direction.Set((direction.x < 0) ? -1 : 1, 0.178f, 0);
         }
-        StartCoroutine(ShootBall(BallCount, direction));
+        ShotBallCount = BallCount;
+        ShootBallCount = BallCount;
+        defaultBall.gameObject.SetActive(false);
+        ballDirection = direction;
+        
     }
     void EndShootingBall()
     {
         State = BallState.Wait;
         Score++;
+        if (MaxScore < Score)
+            MaxScore = Score;
         touchSenser.gameObject.SetActive(true);
-        BrickMoveAndCreate();
+        ScoreWindowUpdate();
+        BlockMoveAndCreate();
     }
 
     public void DisableBall(Ball ball)
     {
         ball.gameObject.SetActive(false);
         
-        ShootingBallCount--;
-        if (ShootingBallCount == BallCount - 1) // 첫 번째 공
+        ShotBallCount--;
+        if (ShotBallCount == BallCount - 1) // 첫 번째 공
         {
             defaultBall.gameObject.SetActive(true);
             defaultBall.transform.position = ball.transform.position;
             defaultBall.transform.rotation = Quaternion.identity;
         }
-        if (ShootingBallCount == 0) // 모든 공이 다 튕겨서 땅에 도착했을때
+        if (ShotBallCount == 0) // 모든 공이 다 튕겨서 땅에 도착했을때
         {
             EndShootingBall();
         }
     }
-
-    IEnumerator ShootBall(int ballCount, Vector2 direciton) // 공 쏘기
-    {
-        ShootingBallCount = ballCount;
-        defaultBall.gameObject.SetActive(false);
-        Vector3 pos = defaultBall.transform.position;
-        Vector3 scale = defaultBall.transform.localScale;
-        while(ballCount > 0)
-        {
-            Ball copyBall = PoolManager.Instance.Init(defaultBall.gameObject).GetComponent<Ball>();
-            copyBall.State = BallState.Shooting;
-            copyBall.transform.SetParent(ballParent);
-            copyBall.transform.position = pos;
-            copyBall.transform.localScale = scale;
-            copyBall.GetComponent<Rigidbody2D>().AddForce(direciton * 100 * BallSpeed);
-            copyBall.RB.gravityScale = ballGravity;
-            ballCount--;
-            yield return new WaitForSeconds(0.1f);
-        }
-    }
+    
     #endregion
 
     #region 구름
@@ -233,7 +307,7 @@ public class GameManager : Singleton<GameManager>
     {
         float CLOUD_MAX_DISTANCE = 14.34f; // 구름 최대 거리
         float CLOUD_SPEED = 0.2f; // 구름 이동 속도
-        foreach(Transform cloudObj in Clouds)
+        foreach(Transform cloudObj in clouds)
         {
             cloudObj.Translate(deltaTime * Vector3.right * CLOUD_SPEED);
             if(cloudObj.localPosition.x >= CLOUD_MAX_DISTANCE)

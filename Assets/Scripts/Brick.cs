@@ -6,24 +6,15 @@ using TMPro;
 using DG.Tweening;
 
 
-public class Brick : MonoBehaviour
+public class Brick : Block
 {
     [SerializeField] TextMeshPro hpText;
-
     public int hp;
-    public int x;
-    public int y;
-
 
     public void Hit()
     {
         hp--;
         ShowHp();
-    }
-
-    public void BrickMove()
-    {
-        transform.DOLocalMove(new Vector3(x * 1.8f, y * -1.23f), 0.5f);
     }
     public void ShowHp()
     {

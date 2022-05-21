@@ -37,4 +37,13 @@ public class Ball : MonoBehaviour
             }
         }
     }
+
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        if(collision.gameObject != null && State == BallState.Shooting && collision.transform.tag == "AddBall")
+        {
+            GameManager.Instance.AddBall(collision.gameObject);
+            collision.gameObject.SetActive(false);
+        }
+    }
 }

@@ -8,16 +8,33 @@ using UnityEngine.UI;
 
 public class GameData
 {
-    public string name = "";
-    public List<BrickPos> bricks = new List<BrickPos>();
+    public int Score;
+    public int MaxScore;
+    public int BallCount;
+    public Vector3 BallPos;
+    public List<BlockPos> blocks = new List<BlockPos>();
 }
 
 [System.Serializable]
-public class BrickPos
+public class BlockPos
 {
+    public BlockPos(Block block)
+    {
+        x = block.x;
+        y = block.y;
+    }
+    public byte x;
+    public byte y;
+}
+
+[System.Serializable]
+public class BrickPos : BlockPos
+{
+    public BrickPos(Brick brick) : base(brick)
+    {
+        hp = brick.hp;
+    }
     public int hp;
-    public int x;
-    public int y;
 }
 public class DataManager : Singleton<DataManager>
 {
@@ -57,6 +74,17 @@ public class DataManager : Singleton<DataManager>
         {            
             _gameData = new GameData();
         }
+        GameManager.Instance.Score = gameData.Score;
+        GameManager.Instance.MaxScore = gameData.MaxScore;
+        GameManager.Instance.blocks = new List<Block>();
+        foreach (BlockPos block in gameData.blocks)
+        {
+            BrickPos brick = block as BrickPos;
+            if (brick != null)
+                GameManager.Instance.GetNewBrick(brick.x, brick.y, brick.hp);
+            else
+                GameManager.Instance.GetNewAddBall(block.x, block.y);
+        }
     } 
 
     public void GameQuit()
@@ -67,6 +95,20 @@ public class DataManager : Singleton<DataManager>
     
     public void SaveGameData()
     {
+        gameData.Score = GameManager.Instance.Score;
+        gameData.MaxScore = GameManager.Instance.MaxScore;
+        gameData.blocks = new List<BlockPos>();
+        foreach(Block block in GameManager.Instance.blocks)
+        {
+            if (block.gameObject.activeSelf)
+            {
+                Brick brick = block as Brick;
+                if (brick != null)
+                    gameData.blocks.Add(new BrickPos(brick));
+                else
+                    gameData.blocks.Add(new BlockPos(block));
+            }
+        }
         PlayerPrefs.SetString("SaveData", JsonUtility.ToJson(gameData));
     }
 
@@ -74,5 +116,10 @@ public class DataManager : Singleton<DataManager>
     {
         if (pause)
             SaveGameData();
-    } 
+    }
+
+    private void OnApplicationQuit()
+    {
+        SaveGameData();
+    }
 } 
