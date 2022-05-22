@@ -42,17 +42,26 @@ public class GameManager : Singleton<GameManager>
     Vector3 clickPos;
     Vector3 ballDirection;
 
-    [Header("벽돌 관리")]
+    [Header("블럭 관리")]
     [SerializeField]
     Brick defaultBrick;
     [SerializeField]
     Block defaultAddBall;
     [SerializeField]
-    Transform blockParent;
+    Transform brickParent;
+    [SerializeField]
+    Transform addBallParent;
+    [SerializeField]
+    Transform gravityAddBallParent;
+    [SerializeField]
+    GameObject defaultGravityAddBall;
+    List<GameObject> willAddBalls = new List<GameObject>();
     public List<Block> blocks = new List<Block>();
 
+    [Header("이외")]
     [SerializeField]
     float BallSpeed = 4;
+    public bool Gaming = false;
     int ShotBallCount = 0;
     int ShootBallCount = 0;
     public int Score = 1;
@@ -61,10 +70,23 @@ public class GameManager : Singleton<GameManager>
 
     // Start
 
-    void Start()
+    protected override void Awake()
     {
-        SetResolution(); // 초기에 게임 해상도 고정
-        ScoreWindowUpdate();
+        if (Instance == this)
+        {
+            DontDestroyOnLoad(gameObject);
+            SetResolution(); // 초기에 게임 해상도 고정
+            if (DataManager.Instance._gameData == null)
+                DataManager.Instance.LoadGameData();
+            if (Gaming)
+                ScoreWindowUpdate();
+
+            //풀링 초반에 대부분 해놓기
+            PoolManager.Instance.AddPooling(defaultGravityAddBall, gravityAddBallParent);
+            PoolManager.Instance.AddPooling(defaultAddBall.gameObject, addBallParent);
+            PoolManager.Instance.AddPooling(defaultBall.gameObject, ballParent);
+            PoolManager.Instance.AddPooling(defaultBrick.gameObject, brickParent);
+        }
     }
     #region 해상도 변경
     public void SetResolution()
@@ -102,10 +124,13 @@ public class GameManager : Singleton<GameManager>
 
     void Update()
     {
-        float deltaTime = Time.deltaTime;
-        MoveCloud(deltaTime);
-        if(ShootBallCount > 0 && State == BallState.Shooting)
-           ShootingBall(deltaTime);
+        if (Gaming)
+        {
+            float deltaTime = Time.deltaTime;
+            MoveCloud(deltaTime);
+            if (ShootBallCount > 0 && State == BallState.Shooting)
+                ShootingBall(deltaTime);
+        }
     }
 
     void ScoreWindowUpdate()
@@ -113,18 +138,14 @@ public class GameManager : Singleton<GameManager>
         scoreWindow.text = (Score >= MaxScore ? "<#ff0000>" : "")+ "점수 : " + Score.ToString() + "\n" + "기록 : " + MaxScore.ToString();
     }
 
-    public void AddBall(GameObject addBall)
-    {
-        addBall.SetActive(false);
-    }
-
     void GameOver()
     {
         foreach (Block block in blocks)
-        {
-            block.gameObject.SetActive(false);
-        }
+            block.gameObject.SetActive(false); // 블럭 없애기
+        foreach (GameObject willAddBall in willAddBalls)
+            willAddBall.SetActive(false); // 추가할 예정이였던 공 없애기
         Score = 1;
+        BallCount = 1;
         defaultBall.transform.localPosition = Vector3.zero;
         BlockMoveAndCreate();
         ScoreWindowUpdate();
@@ -133,7 +154,7 @@ public class GameManager : Singleton<GameManager>
     public void GetNewAddBall(byte x, byte y)
     {
         Block copyAddBall = PoolManager.Instance.Init(defaultAddBall.gameObject).GetComponent<Block>();
-        copyAddBall.transform.SetParent(blockParent);
+        copyAddBall.transform.SetParent(addBallParent);
         copyAddBall.transform.localScale = defaultAddBall.transform.localScale;
         copyAddBall.transform.localPosition = new Vector3(x * 1.8f, 1.23f);
         copyAddBall.x = x;
@@ -147,7 +168,7 @@ public class GameManager : Singleton<GameManager>
     public void GetNewBrick(byte x, byte y, int hp)
     {
         Brick copyBrick = PoolManager.Instance.Init(defaultBrick.gameObject).GetComponent<Brick>();
-        copyBrick.transform.SetParent(blockParent);
+        copyBrick.transform.SetParent(brickParent);
         copyBrick.transform.localScale = defaultBrick.transform.localScale;
         copyBrick.transform.localPosition = new Vector3(x * 1.8f, 1.23f);
         copyBrick.x = x;
@@ -162,16 +183,28 @@ public class GameManager : Singleton<GameManager>
     }
     void BlockMoveAndCreate()
     {
+
+        //블럭 이동
         foreach (Block block in blocks)
         {
             block.y++;
             block.BlockMove();
             if (block.gameObject.activeSelf && block.y >= 6)
             {
-                GameOver();
+                GameOver(); // 게임 오버
                 return;
             }
         }
+
+        //공 추가
+        BallCount += willAddBalls.Count;
+        foreach (GameObject willAddBall in willAddBalls)
+        {
+            willAddBall.transform.DOMove(defaultBall.transform.position, 0.6f).OnComplete(() => { willAddBall.SetActive(false); });
+        }
+        willAddBalls.Clear();
+
+        //새 블럭 추가
         int brickCount = Random.Range(3, 5);
         List<int> indexList = new List<int>(6) { 0,1,2,3,4,5 };
         int ballAddIndex = Random.Range(0, brickCount);
@@ -185,7 +218,16 @@ public class GameManager : Singleton<GameManager>
                 GetNewBrick((byte)indexList[index], 0, Score);
             indexList.RemoveAt(index);
         }
-            
+
+    }
+    public void AddBall(GameObject addBall)
+    {
+        addBall.SetActive(false);
+        GameObject gravityAddBallObj = PoolManager.Instance.Init(defaultGravityAddBall);
+        gravityAddBallObj.transform.SetParent(gravityAddBallParent);
+        gravityAddBallObj.transform.localScale = addBall.transform.localScale;
+        gravityAddBallObj.transform.localPosition = addBall.transform.localPosition;
+        willAddBalls.Add(gravityAddBallObj);
     }
     #endregion
 

@@ -11,8 +11,10 @@ public class GameData
     public int Score;
     public int MaxScore;
     public int BallCount;
+    public bool Gaming;
     public Vector3 BallPos;
-    public List<BlockPos> blocks = new List<BlockPos>();
+    public List<BlockPos> addBalls = new List<BlockPos>();
+    public List<BrickPos> bricks = new List<BrickPos>();
 }
 
 [System.Serializable]
@@ -56,12 +58,11 @@ public class DataManager : Singleton<DataManager>
     {
         base.Awake();
         if(Instance == this)
+        {
             DontDestroyOnLoad(gameObject); // DataManager은 Scene이 바껴도 남아있어야 함.
+            LoadGameData();
+        }
     }
-    private void Start() 
-    {
-        LoadGameData(); 
-    } 
     
     public void LoadGameData() 
     {
@@ -76,16 +77,23 @@ public class DataManager : Singleton<DataManager>
         }
         GameManager.Instance.Score = gameData.Score;
         GameManager.Instance.MaxScore = gameData.MaxScore;
-        GameManager.Instance.blocks = new List<Block>();
-        foreach (BlockPos block in gameData.blocks)
-        {
-            BrickPos brick = block as BrickPos;
-            if (brick != null)
-                GameManager.Instance.GetNewBrick(brick.x, brick.y, brick.hp);
-            else
-                GameManager.Instance.GetNewAddBall(block.x, block.y);
-        }
+        GameManager.Instance.Gaming = gameData.Gaming;
+        if (gameData.Gaming)
+            GamingLoadData();
     } 
+
+    public void GamingLoadData()
+    {
+        GameManager.Instance.blocks = new List<Block>();
+        foreach (BlockPos addBall in gameData.addBalls)
+        {
+            GameManager.Instance.GetNewAddBall(addBall.x, addBall.y);
+        }
+        foreach (BrickPos brick in gameData.bricks)
+        {
+            GameManager.Instance.GetNewBrick(brick.x, brick.y, brick.hp);
+        }
+    }
 
     public void GameQuit()
     {
@@ -97,16 +105,17 @@ public class DataManager : Singleton<DataManager>
     {
         gameData.Score = GameManager.Instance.Score;
         gameData.MaxScore = GameManager.Instance.MaxScore;
-        gameData.blocks = new List<BlockPos>();
-        foreach(Block block in GameManager.Instance.blocks)
+        gameData.addBalls = new List<BlockPos>();
+        gameData.bricks = new List<BrickPos>();
+        foreach (Block block in GameManager.Instance.blocks)
         {
             if (block.gameObject.activeSelf)
             {
                 Brick brick = block as Brick;
                 if (brick != null)
-                    gameData.blocks.Add(new BrickPos(brick));
+                    gameData.bricks.Add(new BrickPos(brick));
                 else
-                    gameData.blocks.Add(new BlockPos(block));
+                    gameData.addBalls.Add(new BlockPos(block));
             }
         }
         PlayerPrefs.SetString("SaveData", JsonUtility.ToJson(gameData));

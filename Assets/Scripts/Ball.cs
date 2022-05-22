@@ -43,7 +43,6 @@ public class Ball : MonoBehaviour
         if(collision.gameObject != null && State == BallState.Shooting && collision.transform.tag == "AddBall")
         {
             GameManager.Instance.AddBall(collision.gameObject);
-            collision.gameObject.SetActive(false);
         }
     }
 }
